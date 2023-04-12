@@ -6,6 +6,10 @@ name = "pypi"
 [packages]
 django = "*"
 django-environ = "*"
+beautifulsoup4 = "*"
+lxml = "*"
+requests = "*"
+googlesearch-python = "*"
 
 [dev-packages]
 
