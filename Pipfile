@@ -10,6 +10,7 @@ beautifulsoup4 = "*"
 lxml = "*"
 requests = "*"
 googlesearch-python = "*"
+openpyxl = "*"
 
 [dev-packages]
 

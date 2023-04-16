@@ -2,8 +2,27 @@
 from bs4 import BeautifulSoup
 import requests
 import re
+import openpyxl
 baseUrlErik = "https://www.erichkrause.com"
-# itemName="Zip-пакет пластиковый ErichKrause® Avocado Dusk, Travel (в пакете по 12 шт.)"
+
+info_labels = [
+    ('Торговая марка:', 'trademark'), 
+    ('Описание:', 'description'), 
+    ('Модель:', 'model'), 
+    ('Коллекция:', 'collection'), 
+    ('Формат:', 'format'), 
+    ('Цвет:', 'color'),
+    ('Вместимость, листов:', 'pages'),
+    ('Тип замка:', 'lockType'),
+    ('Тип печати:', 'printType'),
+    ('Размер, мм:', 'size'),
+    ('Текстура поверхности:', 'surfaceTexture'),
+    ('Толщина, мм:', 'thickness'),
+    ('Прозрачность:', 'transparrency'),
+    ('Наличие подвеса:', 'suspensionType'),
+    ('Пол:', 'gender'),
+    ('Страна производства:', 'countryOfManufacture'),
+    ]
 
 def parseProduct(itemName):
 
@@ -22,83 +41,84 @@ def parseProduct(itemName):
     }
     # check if we got result
     if 'Результаты поиска' in search_result:
-        firstFound = soup.find(class_="catalog__item-block")
-        if firstFound:
-            itemHref = firstFound.find("a", {"class": "catalog__item-img"})['href']
-            if itemHref:
-                itemPageUrl=baseUrlErik+itemHref
-                itemPage = session.get(itemPageUrl, verify=True)
-                itemSoup = BeautifulSoup(itemPage.text, 'html.parser')
+        allFound = soup.find_all(class_="catalog__item-block")
 
-                # get and check item SKU
+        if len(allFound)>0:
+            for foundItem in allFound:
+                foundItemName = foundItem.find("a", {"class": "catalog__item-title"})
+                if itemName == re.sub(r'\s+', ' ', foundItemName.string):
+                    itemAHref = foundItem.find("a", {"class": "catalog__item-img"})
+                    if itemAHref == None:
+                        return
+                    itemHref = itemAHref['href']
+                    if itemHref:
+                        itemPageUrl=baseUrlErik+itemHref
+                        itemPage = session.get(itemPageUrl, verify=True)
+                        itemSoup = BeautifulSoup(itemPage.text, 'html.parser')
 
-                itemtitleTags = itemSoup.findAll('h1', {'class': 'catalog__title'})
-                for itemh1 in itemtitleTags:
-                    tempItemName = re.sub(r'\s+', ' ', itemh1.string)
-                    
-                    if tempItemName == itemName:
-                        sku_attrs = {attr: value for attr, value in itemh1.attrs.items() if attr.startswith('data-sku-id')}
-                        sku =  [key for key in sku_attrs][0]
-                        itemData["itemSKU"] = sku
+                        # get and check item SKU
 
-                        # itemSKU will be the id to check
+                        itemtitleTags = itemSoup.findAll('h1', {'class': 'catalog__title'})
+                        for itemh1 in itemtitleTags:
+                            tempItemName = re.sub(r'\s+', ' ', itemh1.string)
+                            
+                            if tempItemName == itemName:
+                                sku_attrs = {attr: value for attr, value in itemh1.attrs.items() if attr.startswith('data-sku-id')}
+                                sku =  [key for key in sku_attrs][0]
+                                itemData["itemSKU"] = sku
 
-                        itemData['found'] = True
+                                # itemSKU will be the id to check
 
-                        itemImage = itemSoup.select_one('a[{}].slider-big__item'.format(itemData["itemSKU"]))
+                                itemData['found'] = True
 
-                        # download image
-                        if itemImage:
-                            img_url = itemImage['href']
-                            response = requests.get(baseUrlErik+img_url)
-                            with open('erichkrause/{}.jpg'.format(itemName), 'wb') as f:
-                                f.write(response.content)
+                                itemImage = itemSoup.select_one('a[{}].slider-big__item'.format(itemData["itemSKU"]))
 
+                                # download image
+                                if itemImage:
+                                    img_url = itemImage['href']
+                                    response = requests.get(baseUrlErik+img_url)
+                                    valid_filename = "".join([c if c.isalnum() else "_" for c in itemName]).rstrip("_")
+                                    with open('erichkrause/{}.jpg'.format(valid_filename), 'wb') as f:
+                                        f.write(response.content)
 
-                        # get other info
+                                # get other info
 
-                        infoContainer = itemSoup.select_one('div[{}].catalog__about'.format(itemData["itemSKU"]))
-                        if infoContainer:
-                            infoContainerActive = infoContainer.select_one('div.catalog__about-item:not(._active)')
-                            if infoContainerActive:
-                                info_labels = [
-                                    ('Торговая марка:', 'trademark'), 
-                                    ('Описание:', 'description'), 
-                                    ('Модель:', 'model'), 
-                                    ('Коллекция:', 'collection'), 
-                                    ('Формат:', 'format'), 
-                                    ('Цвет:', 'color'),
-                                    ('Вместимость, листов:', 'pages'),
-                                    ('Тип замка:', 'lockType'),
-                                    ('Тип печати:', 'printType'),
-                                    ('Размер, мм:', 'size'),
-                                    ('Текстура поверхности:', 'surfaceTexture'),
-                                    ('Толщина, мм:', 'thickness'),
-                                    ('Прозрачность:', 'transparrency'),
-                                    ('Наличие подвеса:', 'suspensionType'),
-                                    ('Пол:', 'gender'),
-                                    ('Страна производства:', 'countryOfManufacture'),
-                                    ]
-
-                                for label, key in info_labels:
-                                    row = infoContainerActive.find('td', string=label)
-                                    if row:
-                                        itemData[key] = row.find_next('td').string
+                                infoContainer = itemSoup.select_one('div[{}].catalog__about'.format(itemData["itemSKU"]))
+                                if infoContainer:
+                                    infoContainerActive = infoContainer.select_one('div.catalog__about-item:not(._active)')
+                                    if infoContainerActive:
+                                        for label, key in info_labels:
+                                            row = infoContainerActive.find('td', string=label)
+                                            if row:
+                                                itemData[key] = row.find_next('td').string
 
     print(itemData)
 
 productsList = [
-    "Zip-пакет пластиковый ErichKrause® Avocado Dusk, B5 (в пакете по 12 шт.)",
-    "Zip-пакет пластиковый ErichKrause® Avocado Dusk, Travel (в пакете по 12 шт.)",
-    "Zip-пакет пластиковый ErichKrause® Cute Animals, B5, ассорти (в пакете по 12 шт.)",
-    "Zip-пакет пластиковый ErichKrause® Dreamy Girls, A4, ассорти (в пакете по 12 шт.)",
-    "Zip-пакет пластиковый ErichKrause® Dreamy Girls, B5, ассорти (в пакете по 12 шт.)",
-    "Zip-пакет пластиковый ErichKrause® Dreamy Girls, Travel, ассорти (в пакете по 12 шт.)",
-    "Zip-пакет пластиковый ErichKrause® Tulips, Travel (в пакете по 12 шт.)",
-    "Антистеплер с фиксатором ErichKrause® Elegance черный (в коробке по 1 шт.)",
-    "Чернографитный шестигранный карандаш ErichKrause® Grafica 100 HB (в коробке по 12 шт.)",
-    "Фломастеры Erichkrause® Washable 18 цветов",
+    "Цветные карандаши шестигранные ErichKrause® 24 цвета",
 ]
 
-for itemName in productsList:
-    parseProduct(itemName)
+
+
+
+workbook = openpyxl.load_workbook('EK.xlsx')
+
+worksheet = workbook['data']
+
+data_list = []
+
+for row in worksheet.iter_rows(min_row=7, min_col=2):
+    cell_value = row[0].value
+    if cell_value:
+        data_list.append(str(cell_value))
+
+
+
+def scrapeProducts():
+    for itemName in data_list:
+        try:
+            parseProduct(itemName)
+        except Exception as e: 
+            print(itemName,"===",e)
+
+scrapeProducts()        
