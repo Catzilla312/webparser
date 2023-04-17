@@ -4,13 +4,12 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-django = "*"
-django-environ = "*"
 beautifulsoup4 = "*"
 lxml = "*"
 requests = "*"
 googlesearch-python = "*"
 openpyxl = "*"
+flask = "*"
 
 [dev-packages]
 

@@ -120,5 +120,4 @@ def scrapeProducts():
             parseProduct(itemName)
         except Exception as e: 
             print(itemName,"===",e)
-
-scrapeProducts()        
+    return "done"    
