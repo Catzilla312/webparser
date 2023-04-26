@@ -1,7 +1,8 @@
 from flask import Flask, request, jsonify
-from parser_1 import scrapeProducts
-
+from parser import scrapeProducts,getProductFromDb
+from scheduler import run_scheduler
 app = Flask(__name__)
+run_scheduler()
 
 @app.route('/parser', methods=['GET'])
 def parser():
@@ -10,18 +11,11 @@ def parser():
     print("ENDED PARSING")    
     return jsonify({'message': result})
 
-# @app.route('/add', methods=['POST'])
-# def add():
-#     data = request.get_json()
-#     if not data or 'a' not in data or 'b' not in data:
-#         return jsonify({'error': 'Invalid payload.'}), 400
-#     a = data['a']
-#     b = data['b']
-#     try:
-#         result = int(a) + int(b)
-#         return jsonify({'result': result})
-#     except ValueError:
-#         return jsonify({'error': 'Invalid parameters.'}), 400
+@app.route('/getProductFromDbRoute', methods=['GET'])
+def getProductFromDbRoute():
+    print("getProductFromDb")
+    getProductFromDb()
+    return jsonify({'message': "done"})
 
 if __name__ == '__main__':
     app.run(debug=True)

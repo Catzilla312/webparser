@@ -3,6 +3,8 @@ from bs4 import BeautifulSoup
 import requests
 import re
 import openpyxl
+from pymongo import MongoClient
+
 baseUrlErik = "https://www.erichkrause.com"
 
 info_labels = [
@@ -25,11 +27,8 @@ info_labels = [
     ]
 
 def parseProduct(itemName):
-
     # clear the name, replace all spaces with one
     itemName = re.sub(r'\s+', ' ', itemName)
-
-    print("STARTED")
     url="https://www.erichkrause.com/search/?search_cat=&q={}".format(itemName)
     session = requests.Session()
     page = session.get(url, verify=True)
@@ -38,6 +37,7 @@ def parseProduct(itemName):
     itemData = {
         "found":False,
         "name":itemName,
+        "itemSKU":itemName,
     }
     # check if we got result
     if 'Результаты поиска' in search_result:
@@ -92,27 +92,20 @@ def parseProduct(itemName):
                                             if row:
                                                 itemData[key] = row.find_next('td').string
 
-    print(itemData)
+    return itemData
 
 productsList = [
     "Цветные карандаши шестигранные ErichKrause® 24 цвета",
 ]
 
-
-
-
 workbook = openpyxl.load_workbook('EK.xlsx')
-
 worksheet = workbook['data']
-
 data_list = []
 
 for row in worksheet.iter_rows(min_row=7, min_col=2):
     cell_value = row[0].value
     if cell_value:
         data_list.append(str(cell_value))
-
-
 
 def scrapeProducts():
     for itemName in data_list:
@@ -121,3 +114,73 @@ def scrapeProducts():
         except Exception as e: 
             print(itemName,"===",e)
     return "done"    
+
+
+def getProductFromDb():
+    print("STARTED WEB PARSER")
+    user = "AdminMono"
+    password = "123123123"
+    uri = f"mongodb://{user}:{password}@localhost:27017/kanzler?authSource=admin&readPreference=primary&directConnection=true&ssl=false"
+    client = MongoClient(uri)
+    db = client["kanzler"]
+    products_collection  = db["products"]
+    webScraper_collection  = db["WebScraper"]
+    products = products_collection.find({"found": False})
+    count = products_collection.count_documents({"found": False})
+
+    scraperLog = {
+        "status": "parsing",
+        "errorMessage": "",
+        "productsToParse": count,
+        "productsFound": 0,
+    }
+
+    if count == 0:
+        scraperLog["errorMessage"] = "no Products to Parse"
+        scraperLog["status"]       = "error"
+ 
+    #create
+    resuscraperLog = webScraper_collection.insert_one(scraperLog)
+    #update
+    listOfErrors = [];
+    foundCount = 0
+    for product in products:
+        try:
+            parsedData = parseProduct(product["name"])
+            query = {"_id": product["_id"]}
+            if parsedData['found']:
+                foundCount +=1
+                new_values = {"$set": {
+                    "found": parsedData["found"],
+                    "trademark": parsedData.get("trademark", ""),
+                    "description": parsedData.get("description", ""),
+                    "model": parsedData.get("model", ""),
+                    "collection": parsedData.get("collection", ""),
+                    "format": parsedData.get("format", ""),
+                    "color": parsedData.get("color", ""),
+                    "pages": parsedData.get("pages", ""),
+                    "lockType": parsedData.get("lockType", ""),
+                    "size": parsedData.get("size", ""),
+                    "surfaceTexture": parsedData.get("surfaceTexture", ""),
+                    "thickness": parsedData.get("thickness", ""),
+                    "transparrency": parsedData.get("transparrency", ""),
+                    "suspensionType": parsedData.get("suspensionType", ""),
+                    "gender": parsedData.get("gender", ""),
+                    "countryOfManufacture": parsedData.get("countryOfManufacture", ""),
+                    }}
+                products_collection.update_one(query, new_values)
+        except Exception as e:
+            listOfErrors.append({
+                "name":product["name"],
+                "error":e
+            })
+
+
+    logerQuery = {"_id": resuscraperLog.inserted_id}
+    logerNew_values = {"$set": {
+                    "productsFound": foundCount,
+                    "status": "done",
+                    "errorMessage":listOfErrors
+                    }}
+
+    webScraper_collection.update_one(logerQuery, logerNew_values)
