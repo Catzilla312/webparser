@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from parser import scrapeProducts,getProductFromDb
+from web_parser import scrapeProducts,getProductFromDb
 from scheduler import run_scheduler
 app = Flask(__name__)
 run_scheduler()

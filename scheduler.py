@@ -1,6 +1,6 @@
 import time
 import sched
-from parser import getProductFromDb
+from web_parser import getProductFromDb
 # Create a scheduler object
 scheduler = sched.scheduler(time.time, time.sleep)
 # Define a function to run the scheduler
