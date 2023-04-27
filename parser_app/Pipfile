@@ -11,6 +11,8 @@ googlesearch-python = "*"
 openpyxl = "*"
 flask = "*"
 pymongo = "*"
+gunicorn = "*"
+python-dotenv = "*"
 
 [dev-packages]
 
